@@ -102,13 +102,13 @@ docker build -t route53-apex-flattener .
 Use the following command to run the Docker container, providing the necessary environment variables and command-line arguments:
 
 ```sh
-docker run --rm     -e AWS_ACCESS_KEY_ID='your_access_key_id'     -e AWS_SECRET_ACCESS_KEY='your_secret_access_key'     -e AWS_SESSION_TOKEN='your_session_token'     route53-apex-flattener --domain example.com --source-dns target.example.net --dry-run
+docker run --rm     -e AWS_ACCESS_KEY_ID='your_access_key_id'     -e AWS_SECRET_ACCESS_KEY='your_secret_access_key'     -e AWS_SESSION_TOKEN='your_session_token'     -e DOMAIN='example.com'     -e SOURCE_DNS='target.example.net'     -e SLEEP_INTERVAL=60     route53-apex-flattener
 ```
 
 ### Example with Real Arguments
 
 ```sh
-docker run --rm     -e AWS_ACCESS_KEY_ID='your_access_key_id'     -e AWS_SECRET_ACCESS_KEY='your_secret_access_key'     -e AWS_SESSION_TOKEN='your_session_token'     route53-apex-flattener --domain pki.com.br --source-dns cnn-tls.map.fastly.net --dry-run
+docker run --rm     -e AWS_ACCESS_KEY_ID='your_access_key_id'     -e AWS_SECRET_ACCESS_KEY='your_secret_access_key'     -e AWS_SESSION_TOKEN='your_session_token'     -e DOMAIN='pki.com.br'     -e SOURCE_DNS='cnn-tls.map.fastly.net'     -e SLEEP_INTERVAL=60     route53-apex-flattener
 ```
 
 ## Additional Information
