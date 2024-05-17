@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+
+import os
+import argparse
+import boto3
+import socket
+from botocore.exceptions import NoCredentialsError, PartialCredentialsError, ClientError
+
+def get_arguments():
+    parser = argparse.ArgumentParser(description="Perform CNAME flattening for an apex domain in AWS Route53.")
+    parser.add_argument('--domain', required=True, help='The domain hosted in Route53.')
+    parser.add_argument('--source-dns', required=True, help='The DNS entry to serve as the source of the new configuration.')
+    parser.add_argument('--dry-run', action='store_true', help='If specified, the script will only print the planned changes without executing them.')
+    return parser.parse_args()
+
+def get_aws_credentials():
+    access_key = os.getenv('AWS_ACCESS_KEY_ID')
+    secret_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    session_token = os.getenv('AWS_SESSION_TOKEN')
+
+    if not access_key or not secret_key:
+        raise NoCredentialsError("AWS credentials are not set in environment variables.")
+
+    return access_key, secret_key, session_token
+
+def resolve_ip_addresses(source_dns):
+    try:
+        ip_addresses = socket.gethostbyname_ex(source_dns)[2]
+        return ip_addresses
+    except socket.gaierror as e:
+        print(f"Error resolving IP addresses for {source_dns}: {e}")
+        return []
+
+def main():
+    args = get_arguments()
+    domain = args.domain
+    source_dns = args.source_dns
+    dry_run = args.dry_run
+
+    try:
+        access_key, secret_key, session_token = get_aws_credentials()
+    except NoCredentialsError as e:
+        print(f"Error: {e}")
+        return
+
+    session = boto3.Session(
+        aws_access_key_id=access_key,
+        aws_secret_access_key=secret_key,
+        aws_session_token=session_token
+    )
+    
+    route53 = session.client('route53')
+
+    try:
+        # Get the hosted zone ID for the domain
+        hosted_zones = route53.list_hosted_zones_by_name(DNSName=domain, MaxItems="1")
+        if not hosted_zones['HostedZones']:
+            print(f"No hosted zones found for domain {domain}")
+            return
+
+        hosted_zone_id = hosted_zones['HostedZones'][0]['Id'].split('/')[-1]
+
+        # Resolve IP addresses for the source DNS
+        ip_addresses = resolve_ip_addresses(source_dns)
+        if not ip_addresses:
+            print(f"No IP addresses found for {source_dns}")
+            return
+
+        # Create new records for each IP address
+        change_batch = {
+            'Changes': [
+                {
+                    'Action': 'UPSERT',
+                    'ResourceRecordSet': {
+                        'Name': domain,
+                        'Type': 'A',
+                        'TTL': 300,
+                        'ResourceRecords': [{'Value': ip} for ip in ip_addresses]
+                    }
+                }
+            ]
+        }
+        
+        if dry_run:
+            print("Dry run enabled. The following changes would be made:")
+            print(f"Hosted Zone ID: {hosted_zone_id}")
+            print(f"Domain: {domain}")
+            print(f"New DNS target: {source_dns}")
+            print("Resolved IP Addresses:", ip_addresses)
+            print("Change Batch:")
+            print(change_batch)
+        else:
+            # Change record in Route53
+            response = route53.change_resource_record_sets(
+                HostedZoneId=hosted_zone_id,
+                ChangeBatch=change_batch
+            )
+            print("DNS record updated successfully.")
+    
+    except NoCredentialsError:
+        print("No AWS credentials found.")
+    except PartialCredentialsError:
+        print("Incomplete AWS credentials found.")
+    except ClientError as e:
+        print(f"Client error: {e}")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    main()
+
